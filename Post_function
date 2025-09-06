@@ -1,0 +1,73 @@
+from flask import Flask, jsonify, request
+from flask_cors import CORS
+import matplotlib.pyplot as plt
+from qiskit import QuantumCircuit, transpile
+from qiskit.visualization import plot_histogram
+import random
+from random import randrange
+from math import cos,sin,asin,acos,sqrt,pi
+import numpy as np
+import sympy as sp
+from qiskit_aer import StatevectorSimulator, AerSimulator, UnitarySimulator
+import base64
+from io import BytesIO
+ 
+app = Flask(__name__)
+CORS(app)
+
+@app.route("/", methods=["GET"])
+def home():
+    return "✅ Flask Qiskit API is running! Use POST /run"
+ 
+@app.route("/run", methods=["POST"])
+def run_code():
+    try:
+        data = request.get_json()
+        code = data.get("code", "")
+ 
+        # ⚠️ Execute code safely — here we use exec for demo purposes
+        local_scope = {}
+        exec(code, {}, local_scope)
+ 
+        qc = local_scope.get("qc")
+        if qc is None or not isinstance(qc, QuantumCircuit):
+            return jsonify({"error": "No valid QuantumCircuit defined"}), 400
+ 
+        # Run simulation
+
+        m=transpile(qc)
+
+        job=AerSimulator().run(m,shots=1024)
+        counts=job.result().get_counts(m)
+        
+ 
+        # Circuit ASCII
+        ascii_circuit = str(qc.draw(output="text"))
+ 
+        # Circuit image
+        '''buf = BytesIO()
+        circuit_drawer(qc, output="mpl").savefig(buf, format="png")
+        buf.seek(0)
+        circuit_image = "data:image/png;base64," + base64.b64encode(buf.read()).decode()'''
+        circuit_image="Not implemented"
+ 
+        # Histogram
+        buf = BytesIO()
+        plot_histogram(counts).savefig(buf, format="png", dpi=60)
+        buf.seek(0)
+        #compressed = zlib.compress(buf.read())
+        histogram_image = "data:image/png;base64," + base64.b64encode(buf.read()).decode()
+ 
+        return jsonify({
+            "counts": counts,
+            "ascii_circuit": ascii_circuit,
+            "circuit_image": circuit_image,
+            "histogram_image": histogram_image
+        })
+ 
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+ 
+ 
+if __name__ == "__main__":
+    app.run(port=5000, debug=True)
